@@ -35,6 +35,11 @@ from pdfminer.utils import (
     matrix2str,
     uniq,
 )
+from pythainlp import correct
+import pythainlp.util
+from pythainlp.tokenize import word_tokenize
+from pythainlp.corpus.common import thai_words
+from pythainlp.util import count_thai_chars
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +66,9 @@ class LAParams:
     :param char_margin: If two characters are closer together than this
         margin they are considered part of the same line. The margin is
         specified relative to the width of the character.
+    :param th_char_margin: If two Thai characters are closer together than this
+        margin they are considered part of the same line. The margin is
+        specified relative to the width of the Thai character.
     :param word_margin: If two characters on the same line are further apart
         than this margin then they are considered to be two separate words, and
         an intermediate space will be added for readability. The margin is
@@ -84,6 +92,7 @@ class LAParams:
         self,
         line_overlap: float = 0.5,
         char_margin: float = 2.0,
+        th_char_margin: float = 0.11,
         line_margin: float = 0.5,
         word_margin: float = 0.1,
         boxes_flow: Optional[float] = 0.5,
@@ -92,6 +101,7 @@ class LAParams:
     ) -> None:
         self.line_overlap = line_overlap
         self.char_margin = char_margin
+        self.th_char_margin = th_char_margin
         self.line_margin = line_margin
         self.word_margin = word_margin
         self.boxes_flow = boxes_flow
@@ -701,14 +711,441 @@ class LTLayoutContainer(LTContainer[LTComponent]):
         LTContainer.__init__(self, bbox)
         self.groups: Optional[List[LTTextGroup]] = None
 
+     def reAssignSaRaAumVowelAndAdjustCoordinateWithoutToneMarks(
+        self, objs: Iterable[LTComponent]
+    ) -> Iterable[LTComponent]:
+
+        for i in range(objs.__len__()-1,-1,-1):
+            newI = i
+            
+            aPos=None
+            bPos=None
+            cPos=None
+            if (i -2 >=0):
+                aPos = objs[i -2]
+            if (i -1 >=0):
+                bPos = objs[i -1]
+            if (i -0 >=0):
+                cPos = objs[i -0]
+                
+            if (
+                aPos != None 
+                and bPos != None
+                and cPos != None
+            ):
+                if (
+                    count_thai_chars(aPos._text)["consonants"] > 0 
+                    and ' ' == bPos._text 
+                    and 'า' == cPos._text #สระอา
+                    ):
+                        aPos._text += "ำ" #สระอำ
+                        bPosX0Diff = abs(bPos.bbox[0]-bPos.bbox[2])
+                        cPosX0Diff = abs(cPos.bbox[0]-cPos.bbox[2])
+                        aPosOriginBBox = list(aPos.bbox)
+                        if (bPosX0Diff != 0):
+                            aPosOriginBBox[0] -= bPosX0Diff/2
+                            aPosOriginBBox[2] -= bPosX0Diff/2
+                        if (cPosX0Diff != 0):
+                            aPosOriginBBox[0] -= cPosX0Diff/2
+                            aPosOriginBBox[2] -= cPosX0Diff/2
+                        aPos.set_bbox((aPosOriginBBox[0],aPosOriginBBox[1],aPosOriginBBox[2],aPosOriginBBox[3]))
+                        
+                        del objs[newI] #cPos
+                        newI = newI-1
+                        del objs[newI] #then bPos
+                        newI = newI -1
+                        
+                        previousAPos = None
+                        nextAPos = None
+                        if (newI-1 < objs.__len__()):
+                             previousAPos =objs[newI-1]
+                        if (newI+1 < objs.__len__()):
+                             nextAPos =objs[newI+1]
+                             
+                        #expand x0 of aObj position to x1 of previous obj position if previous obj is Thai
+                        if (previousAPos != None):
+                            if (pythainlp.util.countthai(previousAPos._text) >0):
+                                previousCharOriginBBox = list(previousAPos.bbox)
+                                if (aPosOriginBBox[3] == previousCharOriginBBox[3]):
+                                    if (aPosOriginBBox[2] + aPos.width >= previousCharOriginBBox[0]):
+                                        aPosNewOriginBBox = list(aPos.bbox)
+                                        aPosNewOriginBBox[0] = previousCharOriginBBox[2]
+                                        #aPos.set_bbox((aPosNewOriginBBox[0],aPosNewOriginBBox[1],aPosNewOriginBBox[2],aPosNewOriginBBox[3]))
+                                    
+                        #expand x1 of aObj position to x0 of next obj position if next obj is Thai
+                        if (nextAPos != None):
+                            if (pythainlp.util.countthai(nextAPos._text) >0):
+                                nextCharOriginBBox = list(nextAPos.bbox)
+                                if (aPosOriginBBox[3] == nextCharOriginBBox[3]):
+                                    if (aPosOriginBBox[0] - aPos.width <= nextCharOriginBBox[2]):
+                                        aPosNewOriginBBox = list(aPos.bbox)
+                                        aPosNewOriginBBox[2] = nextCharOriginBBox[0]
+                                        aPos.set_bbox((aPosNewOriginBBox[0],aPosNewOriginBBox[1],aPosNewOriginBBox[2],aPosNewOriginBBox[3]))
+        return objs    
+                
+    def reAssignSaRaAumVowelAndAdjustCoordinateWithToneMarks(
+        self, objs: Iterable[LTComponent]
+    ) -> Iterable[LTComponent]:
+
+        for i in range(objs.__len__()-1,-1,-1):
+            newI = i
+            
+            aPos=None
+            bPos=None
+            cPos=None
+            dPos=None
+            if (i -3 >=0):
+                aPos = objs[i -3]
+            if (i -2 >=0):
+                bPos = objs[i -2]
+            if (i -1 >=0):
+                cPos = objs[i -1]
+            if (i -0 >=0):
+                dPos = objs[i -0]
+                    
+            if (
+                aPos != None 
+                and bPos != None
+                and cPos != None
+                and dPos != None
+            ):
+                if (
+                    count_thai_chars(aPos._text)["consonants"] > 0 
+                    and ' ' == bPos._text 
+                    and (
+                        "่" == cPos._text #ไม้เอก
+                        or "้" == cPos._text #ไม้โท
+                        or "๊" == cPos._text #ไม้ตรี
+                        or "๋" == cPos._text #ไม้จัตวา
+                    )
+                    and 'า' == dPos._text #สระอา
+                    ):
+                        #swap
+                        tmpPos = bPos
+                        objs[i -2] = cPos
+                        objs[i -1] = tmpPos
+                        bPos = cPos
+                        cPos = tmpPos
+                        
+                        aPos._text += bPos._text
+                        aPos._text += "ำ" #สระอำ
+                        bPosX0Diff = abs(bPos.bbox[0]-bPos.bbox[2])
+                        cPosX0Diff = abs(cPos.bbox[0]-cPos.bbox[2])
+                        dPosX0Diff = abs(dPos.bbox[0]-dPos.bbox[2])
+                        aPosOriginBBox = list(aPos.bbox)
+                        if (bPosX0Diff != 0):
+                            aPosOriginBBox[0] -= bPosX0Diff/2
+                            aPosOriginBBox[2] -= bPosX0Diff/2
+                        if (cPosX0Diff != 0):
+                            aPosOriginBBox[0] -= cPosX0Diff/2
+                            aPosOriginBBox[2] -= cPosX0Diff/2
+                        if (dPosX0Diff != 0):
+                            aPosOriginBBox[0] -= dPosX0Diff/2
+                            aPosOriginBBox[2] -= dPosX0Diff/2
+                        aPos.set_bbox((aPosOriginBBox[0],aPosOriginBBox[1],aPosOriginBBox[2],aPosOriginBBox[3]))
+                        
+                        del objs[newI] #dPos
+                        newI = newI -1
+                        del objs[newI] #then cPos
+                        newI = newI -1
+                        del objs[newI] #then bPos
+                        newI = newI -1
+                        
+                        previousAPos = None
+                        nextAPos = None
+                        if (newI-1 < objs.__len__()):
+                             previousAPos =objs[newI-1]
+                        if (newI+1 < objs.__len__()):
+                             nextAPos =objs[newI+1]
+                             
+                        #expand x0 of aObj position to x1 of previous obj position if previous obj is Thai
+                        if (previousAPos != None):
+                            if (pythainlp.util.countthai(previousAPos._text) >0):
+                                previousCharOriginBBox = list(previousAPos.bbox)
+                                if (aPosOriginBBox[3] == previousCharOriginBBox[3]):
+                                    if (aPosOriginBBox[2] + aPos.width >= previousCharOriginBBox[0]):
+                                        aPosNewOriginBBox = list(aPos.bbox)
+                                        aPosNewOriginBBox[0] = previousCharOriginBBox[2]
+                                        #aPos.set_bbox((aPosNewOriginBBox[0],aPosNewOriginBBox[1],aPosNewOriginBBox[2],aPosNewOriginBBox[3]))
+                                    
+                        #expand x1 of aObj position to x0 of next obj position if next obj is Thai
+                        if (nextAPos != None):
+                            if (pythainlp.util.countthai(nextAPos._text) >0):
+                                nextCharOriginBBox = list(nextAPos.bbox)
+                                if (aPosOriginBBox[3] == nextCharOriginBBox[3]):
+                                    if (aPosOriginBBox[0] - aPos.width <= nextCharOriginBBox[2]):
+                                        aPosNewOriginBBox = list(aPos.bbox)
+                                        aPosNewOriginBBox[2] = nextCharOriginBBox[0]
+                                        aPos.set_bbox((aPosNewOriginBBox[0],aPosNewOriginBBox[1],aPosNewOriginBBox[2],aPosNewOriginBBox[3]))
+        return objs
+       
+    def adjustCoordinateOfOverheadVowelsAndToneMarks (
+        self, objs: Iterable[LTComponent]
+    ) -> Iterable[LTComponent]:
+
+        for i in range(objs.__len__()-1,-1,-1):
+            newI = i
+            
+            aPos=None
+            bPos=None
+            cPos=None
+            
+            if (i -2 >=0):
+                aPos = objs[i -2]
+            if (i -1 >=0):
+                bPos = objs[i -1]
+            if (i -0 >=0):
+                cPos = objs[i -0]
+                
+            if (
+                aPos != None 
+                and bPos != None
+                and cPos != None
+            ):
+                if (
+                        (
+                            count_thai_chars(aPos._text)["consonants"] > 0
+                            and (
+                                "ั" == bPos._text #ไม้หันอากาศ
+                                or "ิ" == bPos._text #ไม้อิ
+                                or "ี" == bPos._text #ไม้อี
+                                or "ึ" == bPos._text #ไม้อึ
+                                or "ื" == bPos._text #ไม้อือ
+                                or "ุ" == bPos._text #ไม้อุ
+                                or "ู" == bPos._text #ไม้อู
+                            )
+                            and (
+                                 "่" == cPos._text #ไม้เอก
+                                or "้" == cPos._text #ไม้โท
+                                or "๊" == cPos._text #ไม้ตรี
+                                or "๋" == cPos._text #ไม้จัตวา
+                            )
+                        )
+                    ):
+                        aPos._text += bPos._text
+                        aPos._text += cPos._text
+                        bPosX0Diff = abs(bPos.bbox[0]-bPos.bbox[2])
+                        cPosX0Diff = abs(cPos.bbox[0]-cPos.bbox[2])
+                        aPosOriginBBox = list(aPos.bbox)
+                        if (bPosX0Diff != 0):
+                            aPosOriginBBox[0] -= bPosX0Diff/2
+                            aPosOriginBBox[2] -= bPosX0Diff/2
+                        if (cPosX0Diff != 0):
+                            aPosOriginBBox[0] -= cPosX0Diff/2
+                            aPosOriginBBox[2] -= cPosX0Diff/2
+                        aPos.set_bbox((aPosOriginBBox[0],aPosOriginBBox[1],aPosOriginBBox[2],aPosOriginBBox[3]))
+                        
+                        del objs[newI] #cPos
+                        newI = newI-1
+                        del objs[newI] #then bPos
+                        newI = newI-1
+                        
+                        previousAPos = None
+                        nextAPos = None
+                        if (newI-1 < objs.__len__()):
+                             previousAPos =objs[newI-1]
+                        if (newI+1 < objs.__len__()):
+                             nextAPos =objs[newI+1]
+                             
+                        #expand x0 of aObj position to x1 of previous obj position if previous obj is Thai
+                        if (previousAPos != None):
+                            if (pythainlp.util.countthai(previousAPos._text) >0):
+                                previousCharOriginBBox = list(previousAPos.bbox)
+                                if (aPosOriginBBox[3] == previousCharOriginBBox[3]):
+                                    if (aPosOriginBBox[2] + aPos.width >= previousCharOriginBBox[0]):
+                                        aPosNewOriginBBox = list(aPos.bbox)
+                                        aPosNewOriginBBox[0] = previousCharOriginBBox[2]
+                                        #aPos.set_bbox((aPosNewOriginBBox[0],aPosNewOriginBBox[1],aPosNewOriginBBox[2],aPosNewOriginBBox[3]))
+                                    
+                        #expand x1 of aObj position to x0 of next obj position if next obj is Thai
+                        if (nextAPos != None):
+                            if (pythainlp.util.countthai(nextAPos._text) >0):
+                                nextCharOriginBBox = list(nextAPos.bbox)
+                                if (aPosOriginBBox[3] == nextCharOriginBBox[3]):
+                                    if (aPosOriginBBox[0] - aPos.width <= nextCharOriginBBox[2]):
+                                        aPosNewOriginBBox = list(aPos.bbox)
+                                        aPosNewOriginBBox[2] = nextCharOriginBBox[0]
+                                        aPos.set_bbox((aPosNewOriginBBox[0],aPosNewOriginBBox[1],aPosNewOriginBBox[2],aPosNewOriginBBox[3]))
+
+                
+        return objs    
+    
+    def adjustCoordinateOfToneMarks (
+        self, objs: Iterable[LTComponent]
+    ) -> Iterable[LTComponent]:
+
+        for i in range(objs.__len__()-1,-1,-1):
+            newI = i
+            
+            aPos=None
+            bPos=None
+            
+            if (i -2 >=0):
+                aPos = objs[i -1]
+            if (i -1 >=0):
+                bPos = objs[i -0]
+                
+            if (
+                aPos != None 
+                and bPos != None
+            ):
+                if (
+                        (
+                            count_thai_chars(aPos._text)["consonants"] > 0
+                            and (
+                                 "่" == bPos._text #ไม้เอก
+                                or "้" == bPos._text #ไม้โท
+                                or "๊" == bPos._text #ไม้ตรี
+                                or "๋" == bPos._text #ไม้จัตวา
+                            )
+                        )
+                    ):
+                        aPos._text += bPos._text
+                        bPosX0Diff = abs(bPos.bbox[0]-bPos.bbox[2])
+                        aPosOriginBBox = list(aPos.bbox)
+                        if (bPosX0Diff != 0):
+                            aPosOriginBBox[0] -= bPosX0Diff/2
+                            aPosOriginBBox[2] -= bPosX0Diff/2
+                        aPos.set_bbox((aPosOriginBBox[0],aPosOriginBBox[1],aPosOriginBBox[2],aPosOriginBBox[3]))
+                        
+                        del objs[newI] #bPos
+                        newI = newI-1
+                        
+                        previousAPos = None
+                        nextAPos = None
+                        if (newI-1 < objs.__len__()):
+                             previousAPos =objs[newI-1]
+                        if (newI+1 < objs.__len__()):
+                             nextAPos =objs[newI+1]
+                             
+                        #expand x0 of aObj position to x1 of previous obj position if previous obj is Thai
+                        if (previousAPos != None):
+                            if (pythainlp.util.countthai(previousAPos._text) >0):
+                                previousCharOriginBBox = list(previousAPos.bbox)
+                                if (aPosOriginBBox[3] == previousCharOriginBBox[3]):
+                                    if (aPosOriginBBox[2] + aPos.width >= previousCharOriginBBox[0]):
+                                        aPosNewOriginBBox = list(aPos.bbox)
+                                        aPosNewOriginBBox[0] = previousCharOriginBBox[2]
+                                        #aPos.set_bbox((aPosNewOriginBBox[0],aPosNewOriginBBox[1],aPosNewOriginBBox[2],aPosNewOriginBBox[3]))
+                                    
+                        #expand x1 of aObj position to x0 of next obj position if next obj is Thai
+                        if (nextAPos != None):
+                            if (pythainlp.util.countthai(nextAPos._text) >0):
+                                nextCharOriginBBox = list(nextAPos.bbox)
+                                if (aPosOriginBBox[3] == nextCharOriginBBox[3]):
+                                    if (aPosOriginBBox[0] - aPos.width <= nextCharOriginBBox[2]):
+                                        aPosNewOriginBBox = list(aPos.bbox)
+                                        aPosNewOriginBBox[2] = nextCharOriginBBox[0]
+                                        aPos.set_bbox((aPosNewOriginBBox[0],aPosNewOriginBBox[1],aPosNewOriginBBox[2],aPosNewOriginBBox[3]))
+
+                
+        return objs    
+    
+    def adjustCoordinateOfOverheadOrUnderheadVowelsWithoutToneMarks (
+        self, objs: Iterable[LTComponent]
+    ) -> Iterable[LTComponent]:
+
+        for i in range(objs.__len__()-1,-1,-1):
+            newI = i
+            
+            aPos=None
+            bPos=None
+            
+            if (i -2 >=0):
+                aPos = objs[i -1]
+            if (i -1 >=0):
+                bPos = objs[i -0]
+                
+            if (
+                aPos != None 
+                and bPos != None
+            ):
+                if (
+                        (
+                            count_thai_chars(aPos._text)["consonants"] > 0
+                            and (
+                                 "ั" == bPos._text #ไม้หันอากาศ
+                                or "ิ" == bPos._text #ไม้อิ
+                                or "ี" == bPos._text #ไม้อี
+                                or "ึ" == bPos._text #ไม้อึ
+                                or "ื" == bPos._text #ไม้อือ
+                                or "ุ" == bPos._text #ไม้อุ
+                                or "ู" == bPos._text #ไม้อู
+                                or "์" == bPos._text #การันต์
+                                or "็" == bPos._text #ไม้ไต่คู้
+                            )
+                        )
+                    ):
+                        aPos._text += bPos._text
+                        bPosX0Diff = abs(bPos.bbox[0]-bPos.bbox[2])
+                        aPosOriginBBox = list(aPos.bbox)
+                        if (bPosX0Diff != 0):
+                            aPosOriginBBox[0] -= bPosX0Diff/2
+                            aPosOriginBBox[2] -= bPosX0Diff/2
+                        aPos.set_bbox((aPosOriginBBox[0],aPosOriginBBox[1],aPosOriginBBox[2],aPosOriginBBox[3]))
+                        
+                        del objs[newI] #bPos
+                        newI = newI-1
+                        
+                        previousAPos = None
+                        nextAPos = None
+                        if (newI-1 < objs.__len__()):
+                             previousAPos =objs[newI-1]
+                        if (newI+1 < objs.__len__()):
+                             nextAPos =objs[newI+1]
+                             
+                        #expand x0 of aObj position to x1 of previous obj position if previous obj is Thai
+                        if (previousAPos != None):
+                            if (pythainlp.util.countthai(previousAPos._text) >0):
+                                previousCharOriginBBox = list(previousAPos.bbox)
+                                if (aPosOriginBBox[3] == previousCharOriginBBox[3]):
+                                    if (aPosOriginBBox[2] + aPos.width >= previousCharOriginBBox[0]):
+                                        aPosNewOriginBBox = list(aPos.bbox)
+                                        aPosNewOriginBBox[0] = previousCharOriginBBox[2]
+                                        #aPos.set_bbox((aPosNewOriginBBox[0],aPosNewOriginBBox[1],aPosNewOriginBBox[2],aPosNewOriginBBox[3]))
+                                    
+                        #expand x1 of aObj position to x0 of next obj position if next obj is Thai
+                        if (nextAPos != None):
+                            if (pythainlp.util.countthai(nextAPos._text) >0):
+                                nextCharOriginBBox = list(nextAPos.bbox)
+                                if (aPosOriginBBox[3] == nextCharOriginBBox[3]):
+                                    if (aPosOriginBBox[0] - aPos.width <= nextCharOriginBBox[2]):
+                                        aPosNewOriginBBox = list(aPos.bbox)
+                                        aPosNewOriginBBox[2] = nextCharOriginBBox[0]
+                                        aPos.set_bbox((aPosNewOriginBBox[0],aPosNewOriginBBox[1],aPosNewOriginBBox[2],aPosNewOriginBBox[3]))
+
+                
+        return objs
+    
+    def thaiLTCharCorrectionAndPositionAdjustmentPackage(
+        self, objs: Iterable[LTComponent]
+    ) -> Iterable[LTComponent]:
+        objs = self.reAssignSaRaAumVowelAndAdjustCoordinateWithToneMarks(objs)
+        objs = self.reAssignSaRaAumVowelAndAdjustCoordinateWithoutToneMarks(objs)
+        objs = self.adjustCoordinateOfOverheadVowelsAndToneMarks(objs)
+        objs = self.adjustCoordinateOfToneMarks(objs)
+        objs = self.adjustCoordinateOfOverheadOrUnderheadVowelsWithoutToneMarks(objs)
+        return objs
+
+    def printLTTextLineHorizontal(
+        self, ltTextLineHorizontal: LTTextLineHorizontal
+        ) -> None:
+        text=""
+        for eachLTChar in ltTextLineHorizontal._objs:
+            text += eachLTChar._text
+        print("---")
+        print(text)
+        print("---")
+        return text
+            
     # group_objects: group text object to textlines.
     def group_objects(
-        self,
-        laparams: LAParams,
-        objs: Iterable[LTComponent],
+        self, laparams: LAParams, objs: Iterable[LTComponent]
     ) -> Iterator[LTTextLine]:
+        objs = self.thaiLTCharCorrectionAndPositionAdjustmentPackage(objs)
         obj0 = None
         line = None
+        objListBeforeYieldTheLine = []
         for obj1 in objs:
             if obj0 is not None:
                 # halign: obj0 and obj1 is horizontally aligned.
@@ -721,13 +1158,24 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                 #
                 #          |<--->|
                 #        (char_margin)
-                halign = (
-                    obj0.is_voverlap(obj1)
-                    and min(obj0.height, obj1.height) * laparams.line_overlap
-                    < obj0.voverlap(obj1)
-                    and obj0.hdistance(obj1)
-                    < max(obj0.width, obj1.width) * laparams.char_margin
-                )
+                if (pythainlp.util.countthai(obj0._text) > 0 and pythainlp.util.countthai(obj1._text) > 0):
+                    halign = (
+                        obj0.is_compatible(obj1)
+                        and obj0.is_voverlap(obj1)
+                        and min(obj0.height, obj1.height) * laparams.line_overlap
+                        < obj0.voverlap(obj1)
+                        and obj0.hdistance(obj1)
+                        < max(obj0.width, obj1.width) * laparams.th_char_margin
+                    )
+                else:
+                    halign = (
+                        obj0.is_compatible(obj1)
+                        and obj0.is_voverlap(obj1)
+                        and min(obj0.height, obj1.height) * laparams.line_overlap
+                        < obj0.voverlap(obj1)
+                        and obj0.hdistance(obj1)
+                        < max(obj0.width, obj1.width) * laparams.char_margin
+                    )
 
                 # valign: obj0 and obj1 is vertically aligned.
                 #
@@ -743,41 +1191,78 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                 #
                 #     |<-->|
                 #   (line_overlap)
-                valign = (
-                    laparams.detect_vertical
-                    and obj0.is_hoverlap(obj1)
-                    and min(obj0.width, obj1.width) * laparams.line_overlap
-                    < obj0.hoverlap(obj1)
-                    and obj0.vdistance(obj1)
-                    < max(obj0.height, obj1.height) * laparams.char_margin
-                )
+                if (pythainlp.util.countthai(obj0._text) > 0 and pythainlp.util.countthai(obj1._text) > 0):
+                    valign = (
+                        laparams.detect_vertical
+                        and obj0.is_compatible(obj1)
+                        and obj0.is_hoverlap(obj1)
+                        and min(obj0.width, obj1.width) * laparams.line_overlap
+                        < obj0.hoverlap(obj1)
+                        and obj0.vdistance(obj1)
+                        < max(obj0.height, obj1.height) * laparams.th_char_margin
+                    )
+                else:
+                    valign = (
+                        laparams.detect_vertical
+                        and obj0.is_compatible(obj1)
+                        and obj0.is_hoverlap(obj1)
+                        and min(obj0.width, obj1.width) * laparams.line_overlap
+                        < obj0.hoverlap(obj1)
+                        and obj0.vdistance(obj1)
+                        < max(obj0.height, obj1.height) * laparams.char_margin
+                    )
 
                 if (halign and isinstance(line, LTTextLineHorizontal)) or (
                     valign and isinstance(line, LTTextLineVertical)
                 ):
+
                     line.add(obj1)
+                    objListBeforeYieldTheLine.append({
+                        "obj0":None,
+                        "obj1":obj1,
+                    })
                 elif line is not None:
+                    testText = self.printLTTextLineHorizontal(line)
                     yield line
+                    objListBeforeYieldTheLine=[]
                     line = None
-                elif valign and not halign:
-                    line = LTTextLineVertical(laparams.word_margin)
-                    line.add(obj0)
-                    line.add(obj1)
-                elif halign and not valign:
-                    line = LTTextLineHorizontal(laparams.word_margin)
-                    line.add(obj0)
-                    line.add(obj1)
                 else:
-                    line = LTTextLineHorizontal(laparams.word_margin)
-                    line.add(obj0)
-                    yield line
-                    line = None
+                    if valign and not halign:
+                        line = LTTextLineVertical(laparams.word_margin)
+                        line.add(obj0)
+                        line.add(obj1)
+                        objListBeforeYieldTheLine.append({
+                            "obj0":obj0,
+                            "obj1":obj1,
+                        })
+                    elif halign and not valign:
+                        line = LTTextLineHorizontal(laparams.word_margin)
+                        line.add(obj0)
+                        line.add(obj1)
+                        objListBeforeYieldTheLine.append({
+                            "obj0":obj0,
+                            "obj1":obj1,
+                        })
+                    else:
+                        line = LTTextLineHorizontal(laparams.word_margin)
+                        line.add(obj0)
+                        testText = self.printLTTextLineHorizontal(line)
+                        yield line
+                        objListBeforeYieldTheLine=[]
+                        line = None
             obj0 = obj1
         if line is None:
             line = LTTextLineHorizontal(laparams.word_margin)
             assert obj0 is not None
             line.add(obj0)
+            objListBeforeYieldTheLine.append({
+                            "obj0":obj0,
+                            "obj1":None,
+                        })
+        testText = self.printLTTextLineHorizontal(line)
         yield line
+        objListBeforeYieldTheLine=[]
+        return
 
     def group_textlines(
         self,
