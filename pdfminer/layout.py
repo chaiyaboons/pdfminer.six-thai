@@ -711,7 +711,7 @@ class LTLayoutContainer(LTContainer[LTComponent]):
         LTContainer.__init__(self, bbox)
         self.groups: Optional[List[LTTextGroup]] = None
 
-     def reAssignSaRaAumVowelAndAdjustCoordinateWithoutToneMarks(
+    def reAssignSaRaAumVowelAndAdjustCoordinateWithoutToneMarks(
         self, objs: Iterable[LTComponent]
     ) -> Iterable[LTComponent]:
 
@@ -735,10 +735,10 @@ class LTLayoutContainer(LTContainer[LTComponent]):
             ):
                 if (
                     count_thai_chars(aPos._text)["consonants"] > 0 
-                    and ' ' == bPos._text 
-                    and 'า' == cPos._text #สระอา
+                    and "\u0020" == bPos._text 
+                    and "\u0e32" == cPos._text #สระอา
                     ):
-                        aPos._text += "ำ" #สระอำ
+                        aPos._text += "\u0e33" #สระอำ
                         bPosX0Diff = abs(bPos.bbox[0]-bPos.bbox[2])
                         cPosX0Diff = abs(cPos.bbox[0]-cPos.bbox[2])
                         aPosOriginBBox = list(aPos.bbox)
@@ -811,14 +811,14 @@ class LTLayoutContainer(LTContainer[LTComponent]):
             ):
                 if (
                     count_thai_chars(aPos._text)["consonants"] > 0 
-                    and ' ' == bPos._text 
+                    and "\u0020" == bPos._text 
                     and (
-                        "่" == cPos._text #ไม้เอก
-                        or "้" == cPos._text #ไม้โท
-                        or "๊" == cPos._text #ไม้ตรี
-                        or "๋" == cPos._text #ไม้จัตวา
+                        "\u0e48" == cPos._text #ไม้เอก
+                        or "\u0e49" == cPos._text #ไม้โท
+                        or "\u0e4a" == cPos._text #ไม้ตรี
+                        or "\u0e4b" == cPos._text #ไม้จัตวา
                     )
-                    and 'า' == dPos._text #สระอา
+                    and "\u0e32" == dPos._text #สระอา
                     ):
                         #swap
                         tmpPos = bPos
@@ -828,7 +828,7 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                         cPos = tmpPos
                         
                         aPos._text += bPos._text
-                        aPos._text += "ำ" #สระอำ
+                        aPos._text += "\u0e33" #สระอำ
                         bPosX0Diff = abs(bPos.bbox[0]-bPos.bbox[2])
                         cPosX0Diff = abs(cPos.bbox[0]-cPos.bbox[2])
                         dPosX0Diff = abs(dPos.bbox[0]-dPos.bbox[2])
@@ -906,19 +906,19 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                         (
                             count_thai_chars(aPos._text)["consonants"] > 0
                             and (
-                                "ั" == bPos._text #ไม้หันอากาศ
-                                or "ิ" == bPos._text #ไม้อิ
-                                or "ี" == bPos._text #ไม้อี
-                                or "ึ" == bPos._text #ไม้อึ
-                                or "ื" == bPos._text #ไม้อือ
-                                or "ุ" == bPos._text #ไม้อุ
-                                or "ู" == bPos._text #ไม้อู
+                                "\u0e31" == bPos._text #ไม้หันอากาศ
+                                or "\u0e34" == bPos._text #ไม้อิ
+                                or "\u0e35" == bPos._text #ไม้อี
+                                or "\u0e36" == bPos._text #ไม้อึ
+                                or "\u0e37" == bPos._text #ไม้อือ
+                                or "\u0e38" == bPos._text #ไม้อุ
+                                or "\u0e39" == bPos._text #ไม้อู
                             )
                             and (
-                                 "่" == cPos._text #ไม้เอก
-                                or "้" == cPos._text #ไม้โท
-                                or "๊" == cPos._text #ไม้ตรี
-                                or "๋" == cPos._text #ไม้จัตวา
+                                 "\u0e48" == cPos._text #ไม้เอก
+                                or "\u0e49" == cPos._text #ไม้โท
+                                or "\u0e4a" == cPos._text #ไม้ตรี
+                                or "\u0e4b" == cPos._text #ไม้จัตวา
                             )
                         )
                     ):
@@ -993,10 +993,10 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                         (
                             count_thai_chars(aPos._text)["consonants"] > 0
                             and (
-                                 "่" == bPos._text #ไม้เอก
-                                or "้" == bPos._text #ไม้โท
-                                or "๊" == bPos._text #ไม้ตรี
-                                or "๋" == bPos._text #ไม้จัตวา
+                                 "\u0e48" == bPos._text #ไม้เอก
+                                or "\u0e49" == bPos._text #ไม้โท
+                                or "\u0e4a" == bPos._text #ไม้ตรี
+                                or "\u0e4b" == bPos._text #ไม้จัตวา
                             )
                         )
                     ):
@@ -1064,15 +1064,15 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                         (
                             count_thai_chars(aPos._text)["consonants"] > 0
                             and (
-                                 "ั" == bPos._text #ไม้หันอากาศ
-                                or "ิ" == bPos._text #ไม้อิ
-                                or "ี" == bPos._text #ไม้อี
-                                or "ึ" == bPos._text #ไม้อึ
-                                or "ื" == bPos._text #ไม้อือ
-                                or "ุ" == bPos._text #ไม้อุ
-                                or "ู" == bPos._text #ไม้อู
-                                or "์" == bPos._text #การันต์
-                                or "็" == bPos._text #ไม้ไต่คู้
+                                 "\u0e31" == bPos._text #ไม้หันอากาศ
+                                or "\u0e34" == bPos._text #ไม้อิ
+                                or "\u0e35" == bPos._text #ไม้อี
+                                or "\u0e36" == bPos._text #ไม้อึ
+                                or "\u0e37" == bPos._text #ไม้อือ
+                                or "\u0e38" == bPos._text #ไม้อุ
+                                or "\u0e39" == bPos._text #ไม้อู
+                                or "\u0e4c" == bPos._text #การันต์
+                                or "\u0e47" == bPos._text #ไม้ไต่คู้
                             )
                         )
                     ):
