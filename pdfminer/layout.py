@@ -711,6 +711,53 @@ class LTLayoutContainer(LTContainer[LTComponent]):
         LTContainer.__init__(self, bbox)
         self.groups: Optional[List[LTTextGroup]] = None
 
+    def convertCorruptedCharacterToIronyPunctuation(
+        self, objs: Iterable[LTComponent]
+    ) -> Iterable[LTComponent]:
+        for i in range(objs.__len__()-1,-1,-1):
+            newI = i
+            
+            aPos=None
+            bPos=None
+            if (i -1 >=0):
+                aPos = objs[i -1]
+            if (i -0 >=0):
+                bPos = objs[i -0]
+            
+            wildcardChar = "\u2e2e" # reverse question mark
+            frequencyCharList = []
+            thaiCharList = []
+            englishCharList= []
+            for i in range(ord("\u0e00"), ord("\u0e7f")):
+                character = chr(i)
+                thaiCharList.append(character)
+                frequencyCharList.append(character)
+                
+            for i in range(ord("\u0020"), ord("\u007e")):
+                character = chr(i)
+                englishCharList.append(character)
+                frequencyCharList.append(character)
+        
+                    
+            if (
+                aPos != None 
+                and bPos != None
+            ):
+                if (
+                    (
+                        aPos._text in thaiCharList
+                    )
+                    and (
+                        bPos._text not in frequencyCharList
+                        and bPos._text != wildcardChar
+                        )
+                    ):
+                        bPos._text = wildcardChar
+                
+                
+                
+        return objs
+    
     def reAssignSaRaAumVowelAndAdjustCoordinateWithoutToneMarks(
         self, objs: Iterable[LTComponent]
     ) -> Iterable[LTComponent]:
@@ -841,7 +888,7 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                             aPosOriginBBox[2] -= cPosX0Diff/2
                         if (dPosX0Diff != 0):
                             aPosOriginBBox[0] -= dPosX0Diff/2
-                            aPosOriginBBox[2] -= dPosX0Diff/2
+                            #aPosOriginBBox[2] -= dPosX0Diff/2
                         aPos.set_bbox((aPosOriginBBox[0],aPosOriginBBox[1],aPosOriginBBox[2],aPosOriginBBox[3]))
                         
                         del objs[newI] #dPos
@@ -1120,6 +1167,7 @@ class LTLayoutContainer(LTContainer[LTComponent]):
     def thaiLTCharCorrectionAndPositionAdjustmentPackage(
         self, objs: Iterable[LTComponent]
     ) -> Iterable[LTComponent]:
+        objs = self.convertCorruptedCharacterToIronyPunctuation(objs)
         objs = self.reAssignSaRaAumVowelAndAdjustCoordinateWithToneMarks(objs)
         objs = self.reAssignSaRaAumVowelAndAdjustCoordinateWithoutToneMarks(objs)
         objs = self.adjustCoordinateOfOverheadVowelsAndToneMarks(objs)
@@ -1158,7 +1206,10 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                 #
                 #          |<--->|
                 #        (char_margin)
-                if (pythainlp.util.countthai(obj0._text) > 0 and pythainlp.util.countthai(obj1._text) > 0):
+                if (
+                    (pythainlp.util.countthai(obj0._text) <= 0 and pythainlp.util.countthai(obj1._text) > 0)
+                    or (pythainlp.util.countthai(obj0._text) > 0 and pythainlp.util.countthai(obj1._text) > 0)
+                ):
                     halign = (
                         obj0.is_compatible(obj1)
                         and obj0.is_voverlap(obj1)
@@ -1191,7 +1242,11 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                 #
                 #     |<-->|
                 #   (line_overlap)
-                if (pythainlp.util.countthai(obj0._text) > 0 and pythainlp.util.countthai(obj1._text) > 0):
+                
+                if (
+                    (pythainlp.util.countthai(obj0._text) <= 0 and pythainlp.util.countthai(obj1._text) > 0)
+                    or (pythainlp.util.countthai(obj0._text) > 0 and pythainlp.util.countthai(obj1._text) > 0)
+                ):
                     valign = (
                         laparams.detect_vertical
                         and obj0.is_compatible(obj1)
